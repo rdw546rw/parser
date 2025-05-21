@@ -1,0 +1,79 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
+import time
+import csv
+
+# Указываем путь к драйверу Chrome и настраиваем опции
+options = webdriver.ChromeOptions()
+options.add_argument("--start-maximized")  # Открываем браузер в полноэкранном режиме
+
+
+# driver = webdriver.Chrome(options=options)
+
+
+def read_data_from_file():
+    with open('input.txt', 'r') as file:
+        data = []
+        for line in file:
+            line = line.strip().split(',')
+            if len(line) == 3:
+                data.append(line)
+            elif len(line) == 2:
+                data.append([line[0], line[0], line[1]])
+
+    return data
+
+
+def parse(country, city, url):
+    with webdriver.Chrome(options=options) as browser:
+        try:
+            browser.get(f'{url}?filter=on&language=&ages=&currency=BND&curriculum%5B%5D=American')
+            time.sleep(5)
+            wait = WebDriverWait(browser, 10)
+            school_links = browser.find_elements(By.XPATH, '//h2[contains(@class, "school-name")]/a')
+            schools_data = []
+            for link in school_links:
+                actions = ActionChains(browser)
+                actions.move_to_element(link).perform()
+                school_data_base_page = link.get_attribute('href')
+                school_title = link.text
+                print(school_title)
+                print(link.get_attribute('href'))
+                time.sleep(3)
+                browser.execute_script(f'window.open("{school_data_base_page}", "_blank1");')
+                browser.switch_to.window(browser.window_handles[-1])
+                website = wait.until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, '#contact-section'))
+                )
+                time.sleep(2)
+                school_home_url = website.find_element(By.CSS_SELECTOR, "a[class='btn btn-primary']").get_attribute(
+                    'href')
+                schools_data.append([city, country, school_title, school_data_base_page, school_home_url])
+                print(school_home_url)
+                print('-------')
+
+                browser.close()
+                browser.switch_to.window(browser.window_handles[0])
+
+            with open('result.csv', mode='a', newline='', encoding='utf-8') as file:
+                writer = csv.writer(file, delimiter=';')
+                for school in schools_data:
+                    writer.writerow(school)
+
+            print(f'✅ Школы из {url} сохранены')
+
+        except Exception as ex:
+            print(f'❌ Ошибка на странице города: {url}\n'
+                  f'{ex}')
+
+
+def main():
+    for i in read_data_from_file():
+        parse(city=i[0], country=i[1], url=i[2])
+
+
+if __name__ == '__main__':
+    main()
